@@ -1,15 +1,15 @@
 from time import sleep
 from datetime import datetime
-from sh import gphoto as gp
+from sh import gphoto2 as gp
 import signal, os, subprocess
 
 shot_date = datetime.now().strftime("%Y-%m-%d")
 shot_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-picID = "PiShots"
+picID = "PiShots_" + shot_time
 
 # clearCommand = ["--folder", "/store_00010001/DCIM/100CANON", \
 #                 "-R", "--delete-all-files"]
-triggerCommand = ["--image-capture"]
+triggerCommand = ["--capture-image"]
 downloadCommand = ["--get-all-files"]
 
 folder_name = shot_date + picID
