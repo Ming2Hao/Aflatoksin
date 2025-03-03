@@ -2,16 +2,16 @@ from time import sleep
 from datetime import datetime
 from sh import gphoto2 as gp
 import signal, os, subprocess
+from typing import Union
+from fastapi import FastAPI
 
-shot_date = datetime.now().strftime("%Y-%m-%d")
-shot_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-picID = "PiShots_" + shot_time
+app = FastAPI()
 
-captureAndDownloadCommand = ["--capture-image-and-download","--filename",picID+".jpg"]
 
-folder_name = shot_date + picID
 
-def createSaveFolder():
+
+
+def createSaveFolder(folder_name):
     try:
         os.makedirs(folder_name)
     except:
@@ -19,10 +19,23 @@ def createSaveFolder():
     os.chdir(folder_name)
     print("Changed to directory: " + folder_name)
 
-def captureImages():
-    gp(captureAndDownloadCommand)
+def captureImages(command, picID):
+    gp(command)
     print("Captured the image: "+picID+".jpg")
 
-createSaveFolder()
-captureImages()
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
 
+
+@app.get("/captureImage")
+def read_root():
+    shot_date = datetime.now().strftime("%Y-%m-%d")
+    shot_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    picID = "PiShots_" + shot_time
+
+    captureAndDownloadCommand = ["--capture-image-and-download","--filename",picID+".jpg"]
+
+    folder_name = shot_date + picID
+    createSaveFolder(folder_name)
+    captureImages(captureAndDownloadCommand, picID)
