@@ -4,6 +4,7 @@ from sh import gphoto2 as gp
 import signal, os, subprocess
 from typing import Union
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 app = FastAPI()
 
@@ -36,6 +37,7 @@ def read_root():
 
     captureAndDownloadCommand = ["--capture-image-and-download","--filename",picID+".jpg"]
 
-    folder_name = shot_date + picID
+    folder_name = shot_date
     createSaveFolder(folder_name)
     captureImages(captureAndDownloadCommand, picID)
+    return FileResponse(picID+".jpg")
