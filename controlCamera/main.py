@@ -7,10 +7,8 @@ shot_date = datetime.now().strftime("%Y-%m-%d")
 shot_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 picID = "PiShots_" + shot_time
 
-# clearCommand = ["--folder", "/store_00010001/DCIM/100CANON", \
-#                 "-R", "--delete-all-files"]
-triggerCommand = ["--capture-image"]
-downloadCommand = ["--get-all-files"]
+captureAndDownloadCommand = ["--capture-image-and-download"]
+changeFileNameCommand = ["--filename "+picID+".jpg"]
 
 folder_name = shot_date + picID
 
@@ -23,22 +21,10 @@ def createSaveFolder():
     print("Changed to directory: " + folder_name)
 
 def captureImages():
-    gp(triggerCommand)
-    # sleep(3)
-    gp(downloadCommand)
-    # gp(clearCommand)
-
-def renameFiles(ID):
-    for filename in os.listdir("."):
-        if len(filename) < 13:
-            if filename.endswith(".JPG"):
-                os.rename(filename, (shot_time + ID + ".JPG"))
-                print("Renamed the JPG")
-            elif filename.endswith(".CR2"):
-                os.rename(filename, (shot_time + ID + ".CR2"))
-                print("Renamed the CR2")
+    gp(changeFileNameCommand)
+    gp(captureAndDownloadCommand)
+    print("Captured the image: "+picID+".jpg")
 
 createSaveFolder()
 captureImages()
-renameFiles(picID)
 
