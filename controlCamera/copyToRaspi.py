@@ -7,8 +7,11 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import httpx
-folderpath= 'C:/Users/Ivan Laptop/Downloads/asd/datasets/hasil'
+folderpath= (f'C:/Users/Ivan Laptop/Downloads/asd/datasets/hasil')
+
+
 async def fetch_data_from_third_party_api(url: str):
     async with httpx.AsyncClient() as client:
         try:
@@ -28,9 +31,6 @@ async def DetectAflatoksinUsingCV(filepath):
     else:
         # Apply median filtering to reduce salt-and-pepper noise
         filtered_image = cv2.medianBlur(image, 5)
-
-        # Apply Gaussian blurring to smooth the image further
-        filtered_image = cv2.GaussianBlur(filtered_image, (9, 9), 0)
 
         # Split the channels of the filtered image
         B, G, R = cv2.split(filtered_image)
@@ -105,17 +105,25 @@ async def DetectAflatoksinUsingCV(filepath):
         height, width, channels = labeled_image.shape
         percentage=(pixel/(height*width))*100
         print(percentage)
-        save_path2=(f"{folderpath}/labeled_image-{datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H:%M:%S')}.jpg")
+        save_path2=(f"{folderpath}/labeled_image-{datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S')}.jpg")
         print(save_path2)
         async with aiofiles.open(save_path2, "wb") as img_file:
             await img_file.write(cv2.imencode('.jpg', labeled_image)[1].tobytes())
             print(f"✅ Image successfully saved to {save_path2}")
         return (save_path2,countingLabel-1,str(pixel),percentage)
 app = FastAPI()
-@app.get("/DetectCV")
+origins = ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+@app.get("/DetectAndGrade")
 async def read_root():
-    data = await fetch_data_from_third_party_api("https://localhost:3000/captureImage")
-    save_path=(f"{folderpath}/{datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H:%M:%S')}.jpg")
+    data = await fetch_data_from_third_party_api("http://192.168.33.227:8000/captureImage")
+    save_path=(f"{folderpath}/{datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S')}.jpg")
     print(save_path)
     # print(data)
     async with aiofiles.open(save_path, "wb") as img_file:
@@ -126,9 +134,16 @@ async def read_root():
     try:
         print(save_path)
         responseImage,totalArea,pixel, percentage = await DetectAflatoksinUsingCV(save_path)
-        return JSONResponse(content={"message": "Success", "file": responseImage,"total Area":str(totalArea),"pixel":str(pixel),"percentage":str(percentage) }, status_code=200)
+        return JSONResponse(content={"message": "Success", "graded_image_path": responseImage,"original_image_path":str(save_path),"total_detected_objects":str(totalArea),"total_area_pixels":str(pixel),"total_area_percentage":str(percentage) }, status_code=200)
     except Exception as e:
         return JSONResponse(content={"message": f"An error occurred: {str(e)}"}, status_code=500)
+@app.get("/getImage")
+def read_item(filepath:str):
+    try:
+      response=FileResponse(filepath)
+      return FileResponse(f"{filepath}")
+    except Exception as e:
+      return JSONResponse(content={"message": f"An error occurred: {str(e)}"}, status_code=500)
 # @app.get("/test")
 # async def read_root():
 #     path_baru="c:/Users/Ivan Laptop/Downloads/asd/datasets/images/18.jpg"
