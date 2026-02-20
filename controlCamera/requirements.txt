@@ -1,0 +1,9 @@
+opencv-python
+numpy
+fastapi
+uvicorn  # Needed to run the FastAPI application
+pydantic # Often an implicit dependency of FastAPI
+python-multipart # If you handle form data or file uploads in FastAPI
+httpx
+aiofiles
+pymysql
