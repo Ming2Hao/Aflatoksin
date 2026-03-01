@@ -141,6 +141,8 @@ def _select_grading_history_sync(limit: int):
                     id,
                     captured_at,
                     final_grade,
+                    batch_id,
+                    tray_id,
                     total_area_pixels,
                     total_area_percentage,
                     total_objects,
@@ -202,6 +204,8 @@ def _insert_grading_sync(data) -> int:
                 INSERT INTO grading_runs (
                     captured_at,
                     final_grade,
+                    batch_id,
+                    tray_id,
                     total_area_pixels,
                     total_area_percentage,
                     total_objects,
@@ -214,11 +218,13 @@ def _insert_grading_sync(data) -> int:
                     original_image_path,
                     graded_image_path,
                     detail_json
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     captured_at,
                     str(data["final_grade"]),
+                    data.get("batch_id"),
+                    data.get("tray_id"),
                     int(data["total_area_pixels"]),
                     float(data["total_area_percentage"]),
                     int(data["total_objects"]),
@@ -340,6 +346,8 @@ async def grade_using_cv(
     filepath: str,
     thresholds: tuple[int, int, int] = (150, 160, 168),
     ppb_overrides: dict | None = None,
+    batch_id: str | None = None,
+    tray_id: str | None = None,
 ):
     """
     Mendeteksi dan mengklasifikasikan aflatoksin pada gambar jagung.
@@ -555,6 +563,8 @@ async def grade_using_cv(
         "graded_image_path": save_path,
         "original_image_path": filepath,
         "thresholds": {"t1": t1, "t2": t2, "t3": t3},
+        "batch_id": batch_id,
+        "tray_id": tray_id,
     }
     print(final_grade)
 
@@ -577,6 +587,8 @@ async def read_root(
     w_reject: Union[float, None] = None,
     w_grade_d: Union[float, None] = None,
     w_grade_c: Union[float, None] = None,
+    batch_id: Union[str, None] = None,
+    tray_id: Union[str, None] = None,
 ):
     prev_cwd = os.getcwd()
     shot_date = datetime.now().strftime("%Y-%m-%d")
@@ -596,7 +608,13 @@ async def read_root(
             "w_grade_d": w_grade_d,
             "w_grade_c": w_grade_c,
         }
-        result = await grade_using_cv(original_path, thresholds=thresholds, ppb_overrides=ppb_overrides)
+        result = await grade_using_cv(
+            original_path,
+            thresholds=thresholds,
+            ppb_overrides=ppb_overrides,
+            batch_id=batch_id,
+            tray_id=tray_id,
+        )
         return result
     except HTTPException:
         raise

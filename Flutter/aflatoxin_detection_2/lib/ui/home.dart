@@ -41,6 +41,17 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
       TextEditingController(text: '0.00615017');
     final TextEditingController _wGradeCController =
       TextEditingController(text: '-0.00570708');
+    final TextEditingController _trayController =
+        TextEditingController(text: 'Nampan-1');
+    final TextEditingController _batchController =
+        TextEditingController(text: 'Batch-001');
+
+    final Map<String, double> _maxPpbByTray = {};
+    final Map<String, int> _photoCountByTray = {};
+    final Map<String, String> _bestGradeByTray = {};
+
+    double get _batchTotalPpb =>
+        _maxPpbByTray.values.fold(0.0, (prev, value) => prev + value);
 
   @override
   void dispose() {
@@ -50,6 +61,8 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
     _wRejectController.dispose();
     _wGradeDController.dispose();
     _wGradeCController.dispose();
+    _trayController.dispose();
+    _batchController.dispose();
     super.dispose();
   }
 
@@ -203,7 +216,46 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
     return any ? total : null;
   }
 
+  void _recordCaptureForBatch({
+    required String trayId,
+    required double? ppb,
+    required String? grade,
+  }) {
+    final normalizedTray = trayId.trim();
+    if (normalizedTray.isEmpty || ppb == null) return;
+
+    _photoCountByTray[normalizedTray] =
+        (_photoCountByTray[normalizedTray] ?? 0) + 1;
+
+    final previousBest = _maxPpbByTray[normalizedTray];
+    if (previousBest == null || ppb > previousBest) {
+      _maxPpbByTray[normalizedTray] = ppb;
+      _bestGradeByTray[normalizedTray] = (grade == null || grade.isEmpty)
+          ? 'N/A'
+          : grade;
+    }
+  }
+
+  void _resetBatchSummary() {
+    setState(() {
+      _maxPpbByTray.clear();
+      _photoCountByTray.clear();
+      _bestGradeByTray.clear();
+    });
+  }
+
   Future<void> fetchImage() async {
+    final batchId = _batchController.text.trim();
+    final trayId = _trayController.text.trim();
+    if (batchId.isEmpty) {
+      _showErrorDialog('Kode Batch wajib diisi.');
+      return;
+    }
+    if (trayId.isEmpty) {
+      _showErrorDialog('Nama/ID nampan wajib diisi.');
+      return;
+    }
+
     final thresholds = _getThresholdsOrShowError();
     if (thresholds == null) return;
 
@@ -227,6 +279,8 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
           'w_reject': weights['w_reject']!.toString(),
           'w_grade_d': weights['w_grade_d']!.toString(),
           'w_grade_c': weights['w_grade_c']!.toString(),
+          'batch_id': batchId,
+          'tray_id': trayId,
         },
       );
       final response = await http.get(uri, headers: requestHeaders);
@@ -243,6 +297,10 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
         }
         print("http://localhost:3000/openImage?image_path=" +
             data["original_image_path"].toString());
+        final parsedSummary = data["summary_by_grade"] as Map<String, dynamic>?;
+        final parsedPpb = (data["ppb_total"] as num?)?.toDouble() ??
+            _computePpbTotal(parsedSummary);
+
         setState(() {
           imageUrl = _openImageUrl(data["graded_image_path"].toString());
           imageUrl2 = _openImageUrl(data["original_image_path"].toString());
@@ -252,9 +310,13 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
           totalAreaPercentage =
               (data["total_area_percentage"] as num?)?.toDouble();
           gradingRunId = (data["grading_run_id"] as num?)?.toInt();
-          summaryByGrade = data["summary_by_grade"] as Map<String, dynamic>?;
-          ppbTotal = (data["ppb_total"] as num?)?.toDouble() ??
-              _computePpbTotal(summaryByGrade);
+          summaryByGrade = parsedSummary;
+          ppbTotal = parsedPpb;
+          _recordCaptureForBatch(
+            trayId: trayId,
+            ppb: parsedPpb,
+            grade: finalGrade,
+          );
           isLoading = false;
         });
       } else {
@@ -395,6 +457,25 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
                               padding: const EdgeInsets.only(bottom: 15),
                               child: Column(
                                 children: [
+                                  TextField(
+                                    controller: _batchController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Kode Batch',
+                                      border: OutlineInputBorder(),
+                                      helperText: 'Masukkan kode batch (tidak di-reset saat ganti batch)',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _trayController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Nampan Aktif',
+                                      border: OutlineInputBorder(),
+                                      helperText:
+                                          'Contoh: Nampan-1 (foto berulang akan dipilih PPB tertinggi)',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
                                   _buildThresholdBox('Batas atas REJECT', _t1Controller),
                                   const SizedBox(height: 10),
                                   _buildThresholdBox('Batas atas GRADE D', _t2Controller),
@@ -432,15 +513,34 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(30),
                                 ),
-                              ),
+                              ),Mulai Batch Baru (Reset Data)
                               child: Text(isHistoryLoading
                                   ? 'Loading History...'
                                   : 'Load History'),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton(
+                              onPressed:
+                                  _maxPpbByTray.isEmpty ? null : _resetBatchSummary,
+                              child: const Text('Reset Batch Berjalan'),
                             ),
                           ],
                         ),
                       )),
                 ),
+                if (_maxPpbByTray.isNotEmpty)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    elevation: 10,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 15, vertical: 15),
+                      child: _buildBatchSummary(),
+                    ),
+                  ),
                 if (history.isNotEmpty)
                   Card(
                     margin: const EdgeInsets.only(bottom: 20),
@@ -767,6 +867,89 @@ class _ImageFetcherScreenState extends State<ImageFetcherScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBatchSummary() {
+    final trayKeys = _photoCountByTray.keys.toList()..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Ringkasan Batch: ${_batchController.text}',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Table(
+          border: TableBorder(
+            horizontalInside: BorderSide(color: Colors.grey[300]!),
+          ),
+          children: [
+            const TableRow(
+              children: [
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    'Nampan',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    'Jumlah Foto',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    'Max PPB',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            ...trayKeys.map(
+              (tray) {
+                final photoCount = _photoCountByTray[tray] ?? 0;
+                final maxPpb = _maxPpbByTray[tray] ?? 0.0;
+                final bestGrade = _bestGradeByTray[tray] ?? 'N/A';
+
+                return TableRow(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text('$tray ($bestGrade)'),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(photoCount.toString()),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(maxPpb.toStringAsFixed(3)),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Total Batch (Σ max PPB per nampan): ${_batchTotalPpb.toStringAsFixed(3)}',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue,
+          ),
+        ),
+      ],
     );
   }
 

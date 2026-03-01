@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS grading_runs (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   captured_at DATETIME NOT NULL,
   final_grade VARCHAR(32) NOT NULL,
+  batch_id VARCHAR(64) NULL,
+  tray_id VARCHAR(64) NULL,
   total_area_pixels INT UNSIGNED NOT NULL,
   total_area_percentage DECIMAL(10,6) NOT NULL,
   total_objects INT UNSIGNED NOT NULL,
